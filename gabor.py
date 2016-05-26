@@ -4,8 +4,8 @@
 
 import numpy as np
 import cv2
-
-
+import os
+import sys
 
 def build_filters():
     filters = []
@@ -15,71 +15,110 @@ def build_filters():
 
     # for different orientations
     for theta in np.arange(0, np.pi, np.pi / 8):
-        for lamda in np.arrange(0, np.pi, np.pi/4):
-            kern.cv2.getGaborKernel((ksize, ksize), 1.0, theta, lamda, 0.5, 0, ktype=cv2.CV_32F)
+        # different wavelengths of the sinusoidal factor
+        for lamda in np.arange(0, np.pi, np.pi/4):
+            kern = cv2.getGaborKernel((ksize, ksize), 4.0, theta, lamda, 0.5, 0, ktype=cv2.CV_32F)
             kern /= 1.5*kern.sum()
-            filters.append((kern<Plug>PeepOpenarams))
+            filters.append(kern)
     return filters
 
+# given an image and a set of filters, derive the response matrices
 def process(img, filters):
-    accum = np.zeros_like(img)
+    responses = []
     for kern in filters:
         fimg = cv2.filter2D(img, cv2.CV_8UC3, kern)
-        np.maximum(accum, fimg, accum)
-    return accum
+        responses.append(fimg)
+    return responses
 
-gabor_feature = np
-g = some_image
+
+# Given a response matrix, compute for the local energy as a 8*8 matrix
+# Local Energy = summing up the squared value of each matrix value from a response matrix
+def get_local_energy (matrix):
+    ret_feature = []
+    box_w = len(matrix) / 8
+    box_h = len(matrix) / 8
+    for i in range(8):
+        for j in range(8):
+            local_energy = 0.0
+            for row in range (box_w):
+                for col in range(box_h):
+                    cur_i = i * box_w + row
+                    cur_j = j * box_h + col
+                    val = int(matrix[cur_i][cur_j]) * int(matrix[cur_i][cur_j])
+                    local_energy = local_energy + val
+            # Divide by the highest possible value, which is 255^2 * (box_w x box_h)
+            # to normalize values from 0 to 1, and replace 0s with EPS value to work with NB
+            local_energy = local_energy / 65025 / box_w / box_h
+            ret_feature.append(local_energy)
+    return ret_feature
+
+# Given a response matrix, compute for the mean amplitude as a 8*8 matrix
+# Mean Amplitude = sum of absolute values of each matrix value from a response matrix
+def get_mean_amplitude (matrix):
+    ret_feature = []
+    box_w = len(matrix) / 8
+    box_h = len(matrix) / 8
+    for i in range(8):
+        for j in range(8):
+            mean_amp = 0.0
+            for row in range (box_w):
+                for col in range(box_h):
+                    cur_i = i * box_w + row
+                    cur_j = j * box_h + col
+                    val = abs(int(matrix[cur_i][cur_j]))
+                    mean_amp = mean_amp + val
+            # Divide by the highest possible value, which is 255 * (box-w x box_h)
+            # to normalize values from 0 to 1, and replace 0s with EPS value to work with NB
+            mean_amp = mean_amp / 255 / box_w / box_h
+            ret_feature.append(mean_amp)
+    return ret_feature
+
+
+
+# Get the feature vector (local energy/mean amplitude from response matrices) of an image
+def get_image_feature_vector(image,filters):
+    ret_feature = []
+    response_matrices = process(image, filters)
+    for matrix in response_matrices:
+        local_energy = get_local_energy(matrix)
+        mean_amplitude = get_mean_amplitude(matrix)
+        ret_feature.extend(local_energy)
+        ret_feature.extend(mean_amplitude)
+    return ret_feature
+
+
+
 filters = build_filters()
-filtered_images = process(g, filters)
-
-# Step 1 - Obtain the set of bags of features.
 
 height = 256
 width = 256
-dictionary_size = 1024
-base_path = "img/all/apple/"
-feature_path = "feature/sift/"
-im_list_file = open("img/all/apple.txt", 'r')
-im_list = []
-for line in im_list_file:
-    im_list.append(line.strip())
 
+feature_path = "feature/gabor/"
+if os.path.exists(feature_path) == False:
+    os.makedirs(feature_path)
 
-sift = cv2.SIFT()
-bow_train = cv2.BOWKMeansTrainer(dictionary_size)
+image_classes = ['apple', 'pottery', 'other', 'glass']
 
 
 
-for i in range(len(im_list)):
-    img = cv2.imread(base_path + im_list[i])
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.resize(img, (height, width))
-    kp, des = sift.detectAndCompute(img, None)
-    bow_train.add(des)
-
-
-dictionary = bow_train.cluster()
-
-# step 2 - Obtain sift feature for each image
-
-detect = cv2.FeatureDetector_create("SIFT")
-extract = cv2.DescriptorExtractor_create("SIFT")
-flann_params = dict(algorithm = 1, trees = 5)
-matcher = cv2.FlannBasedMatcher(flann_params, {})
-bow_extract = cv2.BOWImgDescriptorExtractor( extract, matcher )
-
-bow_extract.setVocabulary(dictionary)
-
-for i in range(len(im_list)):
-    img = cv2.imread(base_path + im_list[i])
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.resize(img, (height, width))
-    output_feature = bow_extract.compute(img, detect.detect(img))
-    img_name = im_list[i].split('/')[-1]
-    img_name = img_name.split('.')[0]
-    output_path = feature_path + img_name + ".npy"
-    np.save(output_path, output_feature)
+for image_class in image_classes:
+    base_path = "img/all/" + image_class + "/"
+    output_feature_path = feature_path + image_class + "/"
+    if os.path.exists(output_feature_path) == False:
+        os.makedirs(output_feature_path)
+    im_list_file = open("img/all/" + image_class + "/" + image_class + ".txt", 'r')
+    im_list = []
+    for line in im_list_file:
+        im_list.append(line.strip())
+    for i in range(len(im_list)):
+        img = cv2.imread(im_list[i])
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = cv2.resize(img, (height, width))
+        output_feature = get_image_feature_vector(img, filters)
+        img_name = im_list[i].split('/')[-1]
+        img_name = img_name.split('.')[0]
+        output_path = output_feature_path + img_name + ".npy"
+        np.save(output_path, output_feature)
 
 
 
