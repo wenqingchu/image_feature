@@ -40,7 +40,7 @@ class Identity(AbstractFeature):
 
 from lbp import LocalDescriptor, ExtendedLBP
 
-class SpatialHistogram(AbstractFeature):
+class LbpFeature(AbstractFeature):
     def __init__(self, lbp_operator=ExtendedLBP(), sz = (8,8)):
         AbstractFeature.__init__(self)
         if not isinstance(lbp_operator, LocalDescriptor):
@@ -79,3 +79,4 @@ class SpatialHistogram(AbstractFeature):
     
     def __repr__(self):
         return "SpatialHistogram (operator=%s, grid=%s)" % (repr(self.lbp_operator), str(self.sz))
+
