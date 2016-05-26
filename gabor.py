@@ -31,7 +31,7 @@ def process(img, filters):
     return responses
 
 
-# Given a response matrix, compute for the local energy as a 8*8 matrix
+# Given a response matrix, compute for the local energy as a 8*8 vector
 # Local Energy = summing up the squared value of each matrix value from a response matrix
 def get_local_energy (matrix):
     ret_feature = []
@@ -52,7 +52,7 @@ def get_local_energy (matrix):
             ret_feature.append(local_energy)
     return ret_feature
 
-# Given a response matrix, compute for the mean amplitude as a 8*8 matrix
+# Given a response matrix, compute for the mean amplitude as a 8*8 vector
 # Mean Amplitude = sum of absolute values of each matrix value from a response matrix
 def get_mean_amplitude (matrix):
     ret_feature = []
